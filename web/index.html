@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>Bluetooth Biplanes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="res/icon.png">
+<link rel="apple-touch-icon" href="res/icon.png">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; color: #c9ccd3; font: 13px/1.4 system-ui, sans-serif; overflow: hidden; overscroll-behavior: none; }
+  body { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none; }
+  #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
+  .cover { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; text-align: center; background: #000a; color: #fff; font: 700 18px/1.5 system-ui, sans-serif; letter-spacing: .02em; padding: 16px; cursor: pointer; }
+  .cover[hidden] { display: none; }
+  #start.ready { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { color: #ffd84a; } }
+
+  /* round, see-through buttons over the game */
+  .ui { position: fixed; z-index: 10; display: flex; align-items: center; justify-content: center; border: 0; padding: 0; color: #fff; font: 700 13px system-ui, sans-serif; letter-spacing: .06em; background: #0000004d; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: inset 0 0 0 2px #ffffff55; touch-action: none; cursor: pointer; transition: transform .06s, background .06s; }
+  .ui.down { transform: scale(.92); background: #ffffff40; }
+  .pill { height: 40px; min-width: 52px; padding: 0 14px; border-radius: 20px; font-size: 12px; }
+  #fs { top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right)); width: 40px; min-width: 40px; padding: 0; font-size: 18px; opacity: .7; }
+  #fs[hidden] { display: none; }
+
+  /* desktop key help, fades out */
+  #hint { position: fixed; z-index: 10; left: 50%; bottom: 14px; transform: translateX(-50%); margin: 0; padding: 7px 14px; border-radius: 18px; background: #000000a0; font-size: 12px; white-space: nowrap; transition: opacity 1s; }
+  #hint b { color: #fff; font-weight: 600; }
+  #hint.gone { opacity: 0; }
+
+  /* touch controls */
+  #touch { display: none; }
+  body.touch #hint { display: none; }
+  body.touch #touch { display: block; }
+  #stickzone { position: fixed; z-index: 5; left: 0; top: 0; bottom: 0; width: 50%; touch-action: none; }
+  #stickhint { position: fixed; z-index: 4; left: calc(9vmin + env(safe-area-inset-left)); bottom: calc(9vmin + env(safe-area-inset-bottom)); width: 120px; height: 120px; border-radius: 50%; box-shadow: inset 0 0 0 2px #ffffff40; background: radial-gradient(circle, #ffffff30 0 25%, #ffffff10 26% 100%); pointer-events: none; transition: opacity .15s; }
+  #stickhint.hide { opacity: 0; }
+  .round { border-radius: 50%; }
+  #fire { right: calc(7vmin + env(safe-area-inset-right)); bottom: calc(9vmin + env(safe-area-inset-bottom)); width: 92px; height: 92px; background: #d2502d80; font-size: 15px; }
+  #eject { right: calc(7vmin + 104px + env(safe-area-inset-right)); bottom: calc(9vmin + env(safe-area-inset-bottom)); width: 62px; height: 62px; background: #2f6db580; font-size: 11px; }
+  #select { top: calc(12px + env(safe-area-inset-top)); left: calc(12px + env(safe-area-inset-left)); }
+  #back { top: calc(12px + env(safe-area-inset-top)); right: calc(62px + env(safe-area-inset-right)); }
+  body:not(.can-fs) #back { right: calc(12px + env(safe-area-inset-right)); }
+</style>
+</head>
+<body>
+  <main id="stage">
+    <canvas id="screen" width="128" height="128"></canvas>
+  </main>
+  <div id="start" class="cover">Loading…</div>
+  <div id="closed" class="cover" hidden>Game closed.<br>Click to play again.</div>
+  <p id="hint"><b>WASD</b> fly · <b>Space</b> fire · <b>E</b> eject · <b>Enter</b> select · <b>Esc</b> back / pause · <b>F</b> full screen</p>
+  <button class="ui pill" id="fs" hidden title="Full screen">⛶</button>
+  <div id="touch">
+    <div id="stickzone"></div>
+    <div id="stickhint"></div>
+    <button class="ui round" id="fire" data-key="-5">FIRE</button>
+    <button class="ui round" id="eject" data-key="42">EJECT</button>
+    <button class="ui pill" id="select" data-key="-6">OK</button>
+    <button class="ui pill" id="back" data-key="-7">☰</button>
+  </div>
+<script src="vendor/nipplejs.js"></script>
+<script src="js/midp.js"></script>
+<script src="js/font.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/input.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/link.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

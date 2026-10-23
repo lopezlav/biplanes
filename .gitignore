@@ -1,0 +1,16 @@
+# Extracted JAR, decompiled Java and asset dumps (local reference only)
+jar/
+src/
+assets/
+
+# Large or third-party tool files
+tools/*.jar
+tools/*.sf2
+tools/music.*
+tools/sheet/
+
+# Wrangler and Node
+.wrangler/
+node_modules/
+
+.DS_Store

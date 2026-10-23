@@ -1,0 +1,9 @@
+{
+  "name": "Bluetooth Biplanes",
+  "short_name": "Biplanes",
+  "start_url": "./",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [{ "src": "res/icon.png", "sizes": "28x28", "type": "image/png" }]
+}
