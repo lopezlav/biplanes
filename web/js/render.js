@@ -215,7 +215,7 @@ const R = {
   paint() {
     B.pending = false;
     const g = R.g;
-    const listMode = B.cy < 0 && (B.a === 1 || B.a === 4);
+    const listMode = B.cy < 0 && (B.a === 1 || B.a === 4 || B.a === O.STATE);
     if (!listMode && R.fbStale) {
       // Leaving play: put the last play frame into the persistent picture,
       // because menus and messages draw on top of it.

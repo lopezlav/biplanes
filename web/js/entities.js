@@ -573,7 +573,7 @@ class E {
       case 1:
         n2 = this.f;
         if (this.i === 3 && this.aq) n2 += 16;
-        graphics.drawImage(B.a7[n2], this.d, this.e, 3);
+        graphics.drawImage((this.skin || B.a7)[n2], this.d, this.e, 3);   // web: skin = online colour
         break;
       case 2:
         if (this.f < 7) {
@@ -588,12 +588,12 @@ class E {
     graphics.tag = 'pi' + idx;
     switch (this.v) {
       case 2:
-        graphics.drawImage(B.a8[27 + this.ac], this.w >> 6, (this.x >> 6) - 10, 3);
+        graphics.drawImage((this.pskin || B.a8)[27 + this.ac], this.w >> 6, (this.x >> 6) - 10, 3);
       // fall through
       case 1:
       case 4:
       case 5:
-        graphics.drawImage(B.a8[21 + this.aa], this.w >> 6, this.x >> 6, 3);
+        graphics.drawImage((this.pskin || B.a8)[21 + this.aa], this.w >> 6, this.x >> 6, 3);
         break;
       case 3:
         graphics.drawImage(B.a8[17 + this.aa], this.w >> 6, this.x >> 6, 3);

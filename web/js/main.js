@@ -65,6 +65,7 @@ async function boot() {
   // new BluetoothBiplanes() -> new b(this)
   await B.init(R.g, R.W, R.H);
   R.buildLayers();
+  O.init();
 
   // Browsers only allow sound after a key press or a tap.
   const overlay = document.getElementById('start');
@@ -114,6 +115,7 @@ async function runThread() {
     } catch (exception) {
       console.error(exception);
     }
+    O.watch();
     if (B.pending) B.paintNow();
     updateControls();
     if (!goOn) break;
@@ -185,7 +187,10 @@ function releaseAll() {
 }
 
 function installInput() {
+  // Keys typed in a text field (the online name) are not game keys.
+  const typing = (ev) => ev.target instanceof HTMLInputElement;
   window.addEventListener('keydown', (ev) => {
+    if (typing(ev)) return;
     const code = KEYMAP[ev.code];
     if (code === undefined || ev.metaKey || ev.ctrlKey || ev.altKey) return;
     ev.preventDefault();
@@ -221,6 +226,9 @@ function installInput() {
       code = K_SOFT_R;                                   // message: Next / Close
     } else if (y >= R.H - 22 && !(isTouch && playing)) {
       code = x < R.W / 2 ? K_SOFT_L : K_SOFT_R;          // soft key labels
+    } else if (B.a === O.STATE) {
+      O.tap(x, y);                                       // online screens
+      return;
     } else if (B.a === 2) {
       const row = menuRowAt(x, y);
       if (row >= 0) { G.c = row; G.h = 2; code = K_FIRE; }
@@ -364,7 +372,8 @@ document.getElementById('closed').addEventListener('click', () => location.reloa
 // user-scalable=no, so pinch zoom, double-tap zoom, text selection and the
 // long-press menu are stopped here.
 (function blockBrowserGestures() {
-  const stop = (ev) => { if (ev.cancelable) ev.preventDefault(); };
+  // A text field (the online name) keeps its normal touch and selection.
+  const stop = (ev) => { if (ev.cancelable && !(ev.target instanceof HTMLInputElement)) ev.preventDefault(); };
   for (const type of ['gesturestart', 'gesturechange', 'gestureend', 'selectstart', 'contextmenu', 'dragstart', 'dblclick']) {
     document.addEventListener(type, stop, { passive: false });
   }

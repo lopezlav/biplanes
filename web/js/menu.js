@@ -7,6 +7,7 @@
 const G = {
   a: 0, b: 0, c: 0, d: null, e: null, f: null, g: null, h: 0, i: 0, j: false,
   QUIT_ENTRY: 21,   // menu entry of "Quit" (/tm string 21)
+  ONLINE_ENTRY: 7,  // menu entry of "Two Player Game", now "Online" (web)
 
   // a(Graphics, w, h, minW, hAlign, vAlign, textAnchor, rowH, font)
   draw(graphics, n2, n3, n4, n5, n6, n7, n8, c2) {
@@ -155,6 +156,11 @@ const G = {
         G.c = 0;
         break;
       case 2: {
+        // Web: "Online" opens the online screens instead of the Bluetooth menu.
+        if (G.e[G.c] === G.ONLINE_ENTRY && B.a === 2) {
+          O.start();
+          break;
+        }
         const n3 = G.e[G.c] << 1;
         switch (G.f[n3]) {
           case 3: {

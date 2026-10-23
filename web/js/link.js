@@ -1,13 +1,16 @@
 // Port of class j (and its helpers l, m): the Bluetooth link.
-// A browser has no Bluetooth serial port, so the link runs over a
-// BroadcastChannel between two tabs (or frames) of the same site. The rest is
-// as in the original: the host waits for a client ("acceptAndOpen"), the
-// client searches for a "BIPLANES" service and connects, and then both read
-// a stream of ints and bytes. The client (j.d == true) is the master.
+// A browser has no Bluetooth, so the link goes over the internet. Both
+// players connect to a private match room on the server (/api/match/<room>,
+// a Durable Object). Then they try a direct WebRTC data channel, which is
+// faster; if it does not open, the packets go through the room. The rest is
+// as in the original: both read a stream of ints and bytes, and the player
+// who joined (j.d == true) is the master.
 'use strict';
 
-const LINK_CHANNEL = 'bt-biplanes';
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+const ICE_SERVERS = [{ urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:stun.l.google.com:19302' }];
+const P2P_WAIT_MS = 4000;     // time to get a direct link before using the relay
+const OPEN_WAIT_MS = 20000;   // time to wait for the other player in the room
 
 // The receive side of the stream: bytes in a queue, reads wait for data.
 class LinkInputStream {
@@ -41,63 +44,125 @@ class LinkOutputStream {
   writeInt(v) { this.buf.push((v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255); }
   write(arr) { for (let i = 0; i < arr.length; i++) this.buf.push(arr[i] & 255); }
   flush() {
-    if (!this.link.peer) throw new Error('IOException: not connected');
-    this.link.post({ t: 'data', to: this.link.peer, bytes: this.buf });
+    this.link.sendBytes(Uint8Array.from(this.buf));
     this.buf = [];
   }
   close() {}
 }
 
 class J {
-  constructor() {
+  constructor(room, role) {
     this.b = null;   // DataInputStream
     this.c = null;   // DataOutputStream
     this.e = 0;      // thread state: 1 connect, 2 read, 4 end
     this.g = null;   // StreamConnection (here: true when open)
-    this.id = Math.random().toString(36).slice(2);
-    this.peer = null;
-    this.accepting = false;
-    this.found = [];
-    this.connectWait = null;
-    this.ch = new BroadcastChannel(LINK_CHANNEL);
-    this.ch.onmessage = (ev) => this.onMessage(ev.data);
+    this.room = room;
+    this.role = role;            // 'host' (asked for the fight) or 'join'
+    this.ws = null;              // socket to the match room
+    this.pc = null;              // WebRTC connection
+    this.dc = null;              // WebRTC data channel
+    this.via = 'relay';          // where the game packets go: 'relay' or 'p2p'
+    this.ending = false;         // true after a normal close
+    this.waits = new Map();      // control message type -> resolve
+    this.inbox = [];             // early control messages
   }
 
-  post(msg) { msg.from = this.id; this.ch.postMessage(msg); }
+  // ------------------------------------------------------------ transport
+  sendBytes(bytes) {
+    if (!this.g) throw new Error('IOException: not connected');
+    if (this.via === 'p2p' && this.dc && this.dc.readyState === 'open') this.dc.send(bytes);
+    else if (this.ws && this.ws.readyState === 1) this.ws.send(bytes);
+    else throw new Error('IOException: closed');
+  }
 
-  onMessage(m) {
-    if (m.to && m.to !== this.id) return;
-    switch (m.t) {
-      case 'inquiry':
-        // A host that waits answers a service search.
-        if (this.accepting) this.post({ t: 'service', to: m.from, name: 'BIPLANES' });
-        break;
-      case 'service':
-        if (m.name === 'BIPLANES' && !this.found.includes(m.from)) this.found.push(m.from);
-        break;
-      case 'open':
-        if (this.accepting && B.bq === this) {
-          this.accepting = false;
-          this.peer = m.from;
-          this._openStreams();
-          this.post({ t: 'opened', to: m.from });
-          if (this.connectWait) { const w = this.connectWait; this.connectWait = null; w(true); }
-        }
-        break;
-      case 'opened':
-        if (this.connectWait) {
-          this.peer = m.from;
-          this._openStreams();
-          const w = this.connectWait; this.connectWait = null; w(true);
-        }
-        break;
-      case 'data':
-        if (this.b && m.from === this.peer) this.b.push(m.bytes);
-        break;
-      case 'close':
-        if (m.from === this.peer && this.b) this.b.close();
-        break;
+  ctl(msg, overDc = false) {
+    const s = JSON.stringify(msg);
+    if (overDc && this.dc && this.dc.readyState === 'open') this.dc.send(s);
+    else if (this.ws && this.ws.readyState === 1) this.ws.send(s);
+  }
+
+  // Wait for a control message of type t (or null after ms).
+  waitFor(t, ms) {
+    const i = this.inbox.findIndex((m) => m.t === t);
+    if (i >= 0) return Promise.resolve(this.inbox.splice(i, 1)[0]);
+    return new Promise((res) => {
+      const timer = setTimeout(() => { this.waits.delete(t); res(null); }, ms);
+      this.waits.set(t, (m) => { clearTimeout(timer); res(m); });
+    });
+  }
+
+  onData(data, fromDc) {
+    if (typeof data !== 'string') {
+      if (this.b) this.b.push(new Uint8Array(data));
+      return;
     }
+    let m;
+    try { m = JSON.parse(data); } catch (e) { return; }
+    switch (m.t) {
+      // The offer can come before the host is ready: make the connection now.
+      case 'sdp': this.startP2P(); this.onSdp(m.sdp); return;
+      case 'ice': this.startP2P(); if (this.pc && m.c) this.pc.addIceCandidate(m.c).catch(() => {}); return;
+      case 'ping': this.ctl({ t: 'pong', n: m.n }, fromDc); return;
+      case 'bye': this.lost(); return;
+    }
+    const w = this.waits.get(m.t);
+    if (w) { this.waits.delete(m.t); w(m); } else this.inbox.push(m);
+  }
+
+  // The other player left, or the network failed.
+  lost() {
+    if (this.e === 4 || this.ending) return;
+    this.dispose();
+    if (B.bq === this) B.linkLost();
+  }
+
+  openSocket() {
+    return new Promise((res) => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/api/match/${this.room}?role=${this.role}`);
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => res(true);
+      ws.onerror = () => res(false);
+      ws.onclose = () => { res(false); this.lost(); };
+      ws.onmessage = (ev) => this.onData(ev.data, false);
+      this.ws = ws;
+    });
+  }
+
+  // Try a direct link. The joiner makes the offer.
+  startP2P() {
+    if (this.pc || this.e === 4 || typeof RTCPeerConnection === 'undefined') return;
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    this.pc = pc;
+    pc.onicecandidate = (ev) => { if (ev.candidate) this.ctl({ t: 'ice', c: ev.candidate }); };
+    const useDc = (dc) => {
+      dc.binaryType = 'arraybuffer';
+      dc.onmessage = (ev) => this.onData(ev.data, true);
+      dc.onclose = () => { if (this.via === 'p2p') this.lost(); };
+      this.dc = dc;
+    };
+    if (this.role === 'join') {
+      useDc(pc.createDataChannel('game', { ordered: true }));
+      pc.createOffer()
+        .then((o) => pc.setLocalDescription(o))
+        .then(() => this.ctl({ t: 'sdp', sdp: pc.localDescription }))
+        .catch(() => {});
+    } else {
+      pc.ondatachannel = (ev) => useDc(ev.channel);
+    }
+  }
+
+  onSdp(sdp) {
+    const pc = this.pc;
+    if (!pc || !sdp) return;
+    pc.setRemoteDescription(sdp)
+      .then(() => {
+        if (sdp.type !== 'offer') return null;
+        return pc.createAnswer()
+          .then((a) => pc.setLocalDescription(a))
+          .then(() => this.ctl({ t: 'sdp', sdp: pc.localDescription }));
+      })
+      .catch(() => {});
   }
 
   _openStreams() {
@@ -124,13 +189,17 @@ class J {
   }
 
   // a(): ask the other phone to close the link
-  quit() { this.send(-254, new Uint8Array(0)); }
+  quit() {
+    this.ending = true;
+    this.send(-254, new Uint8Array(0));
+  }
 
   // b(): read one message
   async step() {
     const n2 = await this.b.readInt();
     switch (n2) {
       case -254:
+        this.ending = true;
         this.send(-255, new Uint8Array(0));
         await sleep(2000);
         this.close();
@@ -150,48 +219,55 @@ class J {
 
   // d(): close the streams
   close() {
-    if (this.peer) this.post({ t: 'close', to: this.peer });
+    this.ending = true;
     if (this.b) this.b.close();
     this.b = null;
     this.c = null;
     this.g = null;
-    this.accepting = false;
+    for (const x of [this.dc, this.pc, this.ws]) { try { if (x) x.close(); } catch (e) {} }
   }
 
-  // The menu made a new link object; this one must stop.
+  // The game left the match; this link must stop.
   dispose() {
     this.e = 4;
-    this.accepting = false;
-    if (this.b) this.b.close();
-    if (this.connectWait) { const w = this.connectWait; this.connectWait = null; w(false); }
+    this.close();
+    for (const w of this.waits.values()) w(null);
+    this.waits.clear();
   }
 
-  // c(): connect. Returns false when no game is found.
+  // c(): connect. Returns false when the other player does not come.
   async connect() {
-    if (!J.d) {
-      B.setStatus(B.bk[40]);
-      this.accepting = true;
-      await new Promise((res) => { this.connectWait = res; });
-      if (this.e === 4) return false;
-      B.setStatus(B.bk[41]);
-    } else {
-      B.setStatus(B.bk[42]);
-      this.found = [];
-      this.post({ t: 'inquiry' });
-      await sleep(3000);
-      if (this.found.length === 0) return false;
-      this.post({ t: 'open', to: this.found[0] });
-      const ok = await Promise.race([
-        new Promise((res) => { this.connectWait = res; }),
-        sleep(5000).then(() => false),
-      ]);
-      this.connectWait = null;
-      if (!ok) {
-        B.setStatus(B.bk[43]);
-        return false;
+    B.setStatus(B.bk[40]);
+    if (!(await this.openSocket()) || this.e === 4) return false;
+    if (!(await this.waitFor('open', OPEN_WAIT_MS)) || this.e === 4) return false;
+    this.startP2P();
+    if (this.role === 'join') {
+      // The master chooses the way and measures the delay, then tells the host.
+      const t0 = Date.now();
+      while (Date.now() - t0 < P2P_WAIT_MS && !(this.dc && this.dc.readyState === 'open') && this.e !== 4) await sleep(50);
+      this.via = this.dc && this.dc.readyState === 'open' ? 'p2p' : 'relay';
+      const rtt = [];
+      for (let n = 0; n < 4 && this.e !== 4; n++) {
+        const t = performance.now();
+        this.ctl({ t: 'ping', n }, this.via === 'p2p');
+        if (!(await this.waitFor('pong', 3000))) return false;
+        rtt.push(performance.now() - t);
       }
-      B.setStatus(B.bk[41]);
+      if (this.e === 4) return false;
+      rtt.sort((a, b) => a - b);
+      const w = J.windowFor(rtt[rtt.length >> 1]);
+      this._openStreams();
+      this.ctl({ t: 'go', via: this.via, w });
+      B.linkWindow = w;
+    } else {
+      const m = await this.waitFor('go', P2P_WAIT_MS + 15000);
+      if (!m || this.e === 4) return false;
+      this.via = m.via === 'p2p' ? 'p2p' : 'relay';
+      this._openStreams();
+      B.linkWindow = m.w | 0 || 2;
     }
+    B.linkVia = this.via;
+    B.setStatus(B.bk[41]);
     return true;
   }
 
@@ -207,6 +283,7 @@ class J {
             const ok = await this.connect();
             if (B.bq !== this) { this.e = 4; break; }
             this.e = B.connected(ok) ? 2 : 4;
+            if (!ok) this.lost();
             await sleep(B.z);
             break;
           }
@@ -220,6 +297,11 @@ class J {
     }
   }
 }
+
+// Web: the game waits when it is this many packets ahead of the other
+// player (2 in the original, for Bluetooth). On a slow internet link a
+// larger number keeps the game going; 50 ms = one packet.
+J.windowFor = (rttMs) => Math.max(2, Math.ceil((rttMs / 2 + 30) / 50) + 1);
 J.d = false;
 
-window.addEventListener('pagehide', () => { if (B.bq && B.bq.peer) B.bq.close(); });
+window.addEventListener('pagehide', () => { if (B.bq) B.bq.close(); });

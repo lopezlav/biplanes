@@ -74,6 +74,18 @@
   body.landscape #ok { right: calc(28px + env(safe-area-inset-right)); bottom: calc(86px + env(safe-area-inset-bottom)); }
   body.landscape #back { right: calc(28px + env(safe-area-inset-right)); bottom: calc(30px + env(safe-area-inset-bottom)); }
 
+  /* online: the name card */
+  .card { position: fixed; z-index: 15; left: 50%; top: 38%; transform: translate(-50%, -50%); width: min(300px, calc(100vw - 40px)); box-sizing: border-box; padding: 18px 18px 16px; border-radius: 16px; background: #10141ce6; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 10px 40px #0009, inset 0 0 0 1px #ffffff22; color: #fff; }
+  .card[hidden] { display: none; }
+  .card h2 { margin: 0 0 12px; font: 800 20px/1.2 system-ui, sans-serif; letter-spacing: .04em; }
+  .card label { display: block; margin-bottom: 6px; font-size: 13px; color: #c9ccd3; }
+  .card input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 0; border-radius: 10px; background: #ffffff1c; color: #fff; font: 600 16px system-ui, sans-serif; outline: none; box-shadow: inset 0 0 0 2px #ffffff30; -webkit-user-select: text; user-select: text; touch-action: auto; }
+  .card input:focus { box-shadow: inset 0 0 0 2px #ffd84a; }
+  .card .row { display: flex; gap: 10px; margin-top: 14px; }
+  .card button { flex: 1; height: 42px; border: 0; border-radius: 21px; background: #ffffff22; color: #fff; font: 700 14px system-ui, sans-serif; cursor: pointer; touch-action: manipulation; }
+  .card button.go { background: #f2c94c; color: #1b1b1b; }
+  body.naming #touch, body.naming #hint { display: none !important; }
+
   /* reads the safe-area sizes for the layout code */
   #safe { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 </style>
@@ -96,6 +108,15 @@
     <button class="ui pill menu off" id="ok" data-key="-6">OK</button>
     <button class="ui pill menu off" id="back" data-key="-7">Back</button>
   </div>
+  <form id="online-name" class="card" hidden autocomplete="off">
+    <h2>Online</h2>
+    <label for="pilot-name">Your name</label>
+    <input id="pilot-name" type="text" maxlength="12" spellcheck="false" autocapitalize="words" enterkeyhint="go">
+    <div class="row">
+      <button type="button" id="name-back">Back</button>
+      <button type="submit" class="go">Go</button>
+    </div>
+  </form>
   <div id="safe"></div>
 <script src="vendor/nipplejs.js"></script>
 <script src="js/midp.js"></script>
@@ -105,6 +126,7 @@
 <script src="js/input.js"></script>
 <script src="js/entities.js"></script>
 <script src="js/link.js"></script>
+<script src="js/online.js"></script>
 <script src="js/game.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>

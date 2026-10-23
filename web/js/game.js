@@ -87,7 +87,18 @@ const B = {
 
   // ------------------------------------------------------------ network
   // a(boolean): called when the link closes (empty in the original)
-  linkClosed(bl) {},
+  linkClosed(bl) {
+    if (typeof O !== 'undefined') O.onLinkClosed(bl);   // web: online play
+  },
+
+  // Web: the link failed or the other player went away (no clean quit).
+  linkLost() {
+    if (typeof O !== 'undefined') O.onLinkClosed(false);
+  },
+
+  // Web: how many packets the game may be ahead of the other player before
+  // it waits (2 in the original; the online link sets it from the delay).
+  linkWindow: 2,
 
   // a(String): status text shown at the top while not connected
   setStatus(string) { B.bp = string; },
@@ -222,6 +233,7 @@ const B = {
   loadMenuStrings() {
     try {
       G.g = B.readStrings('/tm');
+      G.g[G.ONLINE_ENTRY] = 'Online';   // web: was "Two Player Game" (Bluetooth)
       let n2 = 3;
       while (--n2 >= 0) {
         if (B.af[n2]) continue;
@@ -241,6 +253,7 @@ const B = {
     B.bn = await C.load('/fzr');
     B.bo = await C.load('/fzb');
     B.bk = B.readStrings('/tg');
+    B.bk[18] = B.bk[18].replace('Bluetooth', 'online');   // web: the link is online
     B.bl = B.readStrings('/tt');
     B.b5 = new Int32Array(3);
     B.b6 = new Int32Array(3);
@@ -399,6 +412,12 @@ const B = {
   // run(): one pass of the main thread loop. Returns false to stop.
   tick() {
     B.ah = Date.now();
+    // Web: the online screens (name, pilot, airfield) read their own input.
+    if (B.a === O.STATE && B.cy < 0) {
+      O.tick();
+      B.repaint();
+      return true;
+    }
     B.handleInput();
     if (B.cy >= 0) {
       B.repaint();
@@ -440,7 +459,7 @@ const B = {
       case 1:
       case 4: {
         if (B.as === 0) B.e = true;
-        else if (B.as === 1) B.e = !B.d || B.am - B.an < 2;
+        else if (B.as === 1) B.e = !B.d || B.am - B.an < B.linkWindow;
         if (!B.e) {
           if (++B.a4 > 50) {
             if (B.cy === -1) B.showMessage(B.bk[18], 0);
@@ -1395,6 +1414,9 @@ const B = {
           break;
         case 11:
           B.drawRecords(graphics);
+          break;
+        case O.STATE:
+          O.paint(graphics);   // web: online screens
           break;
         case 8:
         case 9:
