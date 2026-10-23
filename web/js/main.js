@@ -28,26 +28,21 @@ const params = new URLSearchParams(location.search);
 const isTouch = matchMedia('(pointer: coarse)').matches || params.has('touch');
 if (isTouch) document.body.classList.add('touch');
 
-// Layout: on touch screens the game and the controls never overlap. In
-// portrait the controls have a panel below the game; in landscape they have
-// space on the left and right. The display layer fits the game in the rest.
+// Layout: the game uses the whole window, inside the safe areas. On touch
+// screens the controls show over the game only while flying (body.playing),
+// so they never cover the menus or the soft key labels. --panel is the height
+// of the control area at the bottom in portrait.
 R.insets = (vw, vh) => {
-  const safe = getComputedStyle(document.getElementById('safe'));
-  const ins = {
-    l: parseFloat(safe.paddingLeft) || 0, t: parseFloat(safe.paddingTop) || 0,
-    r: parseFloat(safe.paddingRight) || 0, b: parseFloat(safe.paddingBottom) || 0,
-  };
   if (!isTouch) return { l: 0, t: 0, r: 0, b: 0 };
+  const safe = getComputedStyle(document.getElementById('safe'));
   const portrait = vh > vw;
   document.body.classList.toggle('portrait', portrait);
   document.body.classList.toggle('landscape', !portrait);
-  if (portrait) {
-    const panel = Math.round(Math.max(200, vh * 0.28));
-    document.body.style.setProperty('--panel', panel + 'px');
-    return { l: ins.l, t: ins.t, r: ins.r, b: panel };
-  }
-  const side = Math.round(Math.max(150, Math.min(200, vw * 0.2)));
-  return { l: Math.max(side, ins.l), t: ins.t, r: Math.max(side, ins.r), b: ins.b };
+  if (portrait) document.body.style.setProperty('--panel', Math.round(Math.max(200, vh * 0.28)) + 'px');
+  return {
+    l: parseFloat(safe.paddingLeft) || 0, t: parseFloat(safe.paddingTop) || 0,
+    r: parseFloat(safe.paddingRight) || 0, b: parseFloat(safe.paddingBottom) || 0,
+  };
 };
 
 async function fetchBytes(path) {
@@ -125,20 +120,48 @@ async function runThread() {
   }
 }
 
-// The touch gamepad shows only while a pilot flies (no menu, no message).
+// The soft key labels of the last paint (left = Select / Next / Help,
+// right = Back / Close). The menu buttons show the same labels.
+let softLabels = { l: null, r: null };
+let paintLabels = softLabels;
+const gamePaint = B.paint, gameSoftKey = B.drawSoftKey;
+B.paint = function (graphics) {
+  paintLabels = { l: null, r: null };
+  try { return gamePaint.call(B, graphics); } finally { softLabels = paintLabels; }
+};
+B.drawSoftKey = function (graphics, string, left) {
+  if (left) paintLabels.l = string; else paintLabels.r = string;
+  return gameSoftKey.call(B, graphics, string, left);
+};
+
+// The touch gamepad (FIRE, EJECT, pause) shows only while a pilot flies (no
+// menu, no message). At other times the OK and Back buttons show instead.
 let playing = false;
+let shownLabels = '';
 function updateControls() {
   const now = B.a === 1 && B.cy < 0;
-  if (now === playing) return;
-  playing = now;
-  document.body.classList.toggle('playing', now);
-  if (!now) {
-    // Let go of the stick and the buttons when they hide.
+  if (now !== playing) {
+    playing = now;
+    document.body.classList.toggle('playing', now);
+    // Let go of the buttons that hide (and of the stick when the flight ends).
     for (const [code, set] of held) {
-      for (const src of [...set]) if (src === 'stick' || src.startsWith('b:')) release(src, code);
+      for (const src of [...set]) if (src.startsWith('b:') || (src === 'stick' && !now)) release(src, code);
     }
     for (const b of document.querySelectorAll('#touch .down')) b.classList.remove('down');
   }
+  if (now || !isTouch) return;
+  const { l, r } = softLabels;
+  const key = l + '|' + r;
+  if (key === shownLabels) return;
+  shownLabels = key;
+  // OK is the left soft key. With no labels at all (score board) it is FIRE,
+  // which goes on there.
+  const ok = document.getElementById('ok'), back = document.getElementById('back');
+  ok.textContent = l || 'OK';
+  ok.dataset.key = l ? K_SOFT_L : K_FIRE;
+  ok.classList.toggle('off', !l && r != null);
+  back.textContent = r || 'Back';
+  back.classList.toggle('off', r == null);
 }
 
 // ---------------------------------------------------------------- input
@@ -225,13 +248,15 @@ function installInput() {
 
   // Touch buttons
   for (const btn of document.querySelectorAll('#touch [data-key]')) {
-    const code = parseInt(btn.dataset.key, 10);
+    // The menu OK button changes its key, so read it on each press.
+    let code = 0;
     const src = 'b:' + btn.id;
     const up = (ev) => { ev.preventDefault(); btn.classList.remove('down'); release(src, code); };
     btn.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       try { btn.setPointerCapture(ev.pointerId); } catch (e) {}
       btn.classList.add('down');
+      code = parseInt(btn.dataset.key, 10);
       press(src, code);
     });
     btn.addEventListener('pointerup', up);

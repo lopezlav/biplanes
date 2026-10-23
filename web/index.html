@@ -37,30 +37,42 @@
   #hint b { color: #fff; font-weight: 600; }
   #hint.gone { opacity: 0; }
 
-  /* touch controls: shown only while flying, in their own space beside or
-     below the game (body.portrait / body.landscape, --panel = space below) */
+  /* touch controls over the game (body.portrait / body.landscape, --panel =
+     height of the control area at the bottom in portrait). The joystick is
+     always there. While flying: FIRE, EJECT and pause. In menus: two small
+     buttons with the game's soft key labels (Select, Back, ...). */
   #touch { display: none; }
   body.touch #hint, body.touch #fs { display: none; }
   body.touch #touch { display: block; }
   #touch > * { transition: opacity .25s, transform .06s, background .06s; }
-  body:not(.playing) #touch > * { opacity: 0; pointer-events: none; }
+  body:not(.playing) #touch > .fly, body.playing #touch > .menu, #touch > .menu.off { opacity: 0; pointer-events: none; }
+  /* while flying the stick works on the left half; in menus only near its
+     circle, so a tap on a menu item still selects it */
   #stickzone { position: fixed; z-index: 5; left: 0; top: 0; bottom: 0; width: 50%; touch-action: none; }
+  body.portrait:not(.playing) #stickzone { top: auto; width: 190px; height: 190px; bottom: calc(var(--panel) / 2 - 95px); }
+  body.landscape:not(.playing) #stickzone { top: auto; width: 200px; height: 180px; }
   #stickhint { position: fixed; z-index: 4; width: 120px; height: 120px; border-radius: 50%; box-shadow: inset 0 0 0 2px #ffffff40; background: radial-gradient(circle, #ffffff30 0 25%, #ffffff10 26% 100%); pointer-events: none; }
   #stickhint.hide { opacity: 0; }
   .round { border-radius: 50%; }
   #fire { width: 92px; height: 92px; background: #d2502d99; font-size: 15px; }
   #eject { width: 62px; height: 62px; background: #2f6db599; font-size: 11px; }
   #pause { width: 46px; height: 40px; min-width: 46px; padding: 0; font-size: 16px; }
+  .menu.pill { min-width: 84px; height: 44px; border-radius: 22px; font-size: 13px; text-transform: uppercase; }
+  #ok { background: #f2c94c99; }
 
   body.portrait #stickhint { left: calc(28px + env(safe-area-inset-left)); bottom: calc(var(--panel) / 2 - 60px); }
   body.portrait #fire { right: calc(24px + env(safe-area-inset-right)); bottom: calc(var(--panel) / 2 - 46px); }
   body.portrait #eject { right: calc(128px + env(safe-area-inset-right)); bottom: calc(var(--panel) / 2 - 56px); }
   body.portrait #pause { right: calc(24px + env(safe-area-inset-right)); bottom: calc(var(--panel) - 52px); }
+  body.portrait #ok { right: calc(24px + env(safe-area-inset-right)); bottom: calc(var(--panel) / 2 + 6px); }
+  body.portrait #back { right: calc(24px + env(safe-area-inset-right)); bottom: calc(var(--panel) / 2 - 50px); }
 
   body.landscape #stickhint { left: calc(24px + env(safe-area-inset-left)); bottom: calc(28px + env(safe-area-inset-bottom)); }
   body.landscape #fire { right: calc(28px + env(safe-area-inset-right)); bottom: calc(32px + env(safe-area-inset-bottom)); }
   body.landscape #eject { right: calc(44px + env(safe-area-inset-right)); bottom: calc(140px + env(safe-area-inset-bottom)); }
   body.landscape #pause { right: calc(16px + env(safe-area-inset-right)); top: calc(14px + env(safe-area-inset-top)); }
+  body.landscape #ok { right: calc(28px + env(safe-area-inset-right)); bottom: calc(86px + env(safe-area-inset-bottom)); }
+  body.landscape #back { right: calc(28px + env(safe-area-inset-right)); bottom: calc(30px + env(safe-area-inset-bottom)); }
 
   /* reads the safe-area sizes for the layout code */
   #safe { position: fixed; visibility: hidden; pointer-events: none; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
@@ -78,9 +90,11 @@
   <div id="touch">
     <div id="stickzone"></div>
     <div id="stickhint"></div>
-    <button class="ui round" id="fire" data-key="-5">FIRE</button>
-    <button class="ui round" id="eject" data-key="42">EJECT</button>
-    <button class="ui pill" id="pause" data-key="-7" title="Pause">❚❚</button>
+    <button class="ui round fly" id="fire" data-key="-5">FIRE</button>
+    <button class="ui round fly" id="eject" data-key="42">EJECT</button>
+    <button class="ui pill fly" id="pause" data-key="-7" title="Pause">❚❚</button>
+    <button class="ui pill menu off" id="ok" data-key="-6">OK</button>
+    <button class="ui pill menu off" id="back" data-key="-7">Back</button>
   </div>
   <div id="safe"></div>
 <script src="vendor/nipplejs.js"></script>
