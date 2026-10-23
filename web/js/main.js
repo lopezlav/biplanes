@@ -266,6 +266,30 @@ function fitScreen() {
 window.addEventListener('resize', fitScreen);
 
 document.getElementById('closed').addEventListener('click', () => location.reload());
+
+// Stop the browser's own touch and zoom actions. iOS Safari ignores
+// user-scalable=no, so pinch zoom, double-tap zoom, text selection and the
+// long-press menu are stopped here.
+(function blockBrowserGestures() {
+  const stop = (ev) => { if (ev.cancelable) ev.preventDefault(); };
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend', 'selectstart', 'contextmenu', 'dragstart', 'dblclick']) {
+    document.addEventListener(type, stop, { passive: false });
+  }
+  // Pinch (two fingers) and double tap
+  document.addEventListener('touchstart', (ev) => { if (ev.touches.length > 1) stop(ev); }, { passive: false });
+  document.addEventListener('touchmove', stop, { passive: false });
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', (ev) => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 350) stop(ev);
+    lastTouchEnd = now;
+  }, { passive: false });
+  // Desktop: ctrl + wheel (also trackpad pinch) and ctrl + / - / 0
+  window.addEventListener('wheel', (ev) => { if (ev.ctrlKey) stop(ev); }, { passive: false });
+  window.addEventListener('keydown', (ev) => {
+    if ((ev.ctrlKey || ev.metaKey) && ['Equal', 'Minus', 'NumpadAdd', 'NumpadSubtract', 'Digit0', 'Numpad0'].includes(ev.code)) stop(ev);
+  });
+})();
 // The key help on desktop fades out after a while.
 setTimeout(() => document.getElementById('hint').classList.add('gone'), 12000);
 boot().catch((err) => {
