@@ -28,6 +28,28 @@ const params = new URLSearchParams(location.search);
 const isTouch = matchMedia('(pointer: coarse)').matches || params.has('touch');
 if (isTouch) document.body.classList.add('touch');
 
+// Layout: on touch screens the game and the controls never overlap. In
+// portrait the controls have a panel below the game; in landscape they have
+// space on the left and right. The display layer fits the game in the rest.
+R.insets = (vw, vh) => {
+  const safe = getComputedStyle(document.getElementById('safe'));
+  const ins = {
+    l: parseFloat(safe.paddingLeft) || 0, t: parseFloat(safe.paddingTop) || 0,
+    r: parseFloat(safe.paddingRight) || 0, b: parseFloat(safe.paddingBottom) || 0,
+  };
+  if (!isTouch) return { l: 0, t: 0, r: 0, b: 0 };
+  const portrait = vh > vw;
+  document.body.classList.toggle('portrait', portrait);
+  document.body.classList.toggle('landscape', !portrait);
+  if (portrait) {
+    const panel = Math.round(Math.max(200, vh * 0.28));
+    document.body.style.setProperty('--panel', panel + 'px');
+    return { l: ins.l, t: ins.t, r: ins.r, b: panel };
+  }
+  const side = Math.round(Math.max(150, Math.min(200, vw * 0.2)));
+  return { l: Math.max(side, ins.l), t: ins.t, r: Math.max(side, ins.r), b: ins.b };
+};
+
 async function fetchBytes(path) {
   const res = await fetch(path);
   if (!res.ok) throw new Error('cannot load ' + path);
@@ -98,7 +120,24 @@ async function runThread() {
       console.error(exception);
     }
     if (B.pending) B.paintNow();
+    updateControls();
     if (!goOn) break;
+  }
+}
+
+// The touch gamepad shows only while a pilot flies (no menu, no message).
+let playing = false;
+function updateControls() {
+  const now = B.a === 1 && B.cy < 0;
+  if (now === playing) return;
+  playing = now;
+  document.body.classList.toggle('playing', now);
+  if (!now) {
+    // Let go of the stick and the buttons when they hide.
+    for (const [code, set] of held) {
+      for (const src of [...set]) if (src === 'stick' || src.startsWith('b:')) release(src, code);
+    }
+    for (const b of document.querySelectorAll('#touch .down')) b.classList.remove('down');
   }
 }
 
@@ -142,20 +181,46 @@ function installInput() {
     else releaseAll();
   });
 
-  // The game draws its soft key labels ("Select", "Back", "Menu", "Next",
-  // "Close") in the bottom corners. A click or tap there presses that key.
+  // Touch and mouse on the game screen (the original has only keys):
+  // - the soft key labels in the bottom corners press those keys;
+  // - in a menu, a tap on an item chooses it (the mouse also highlights it);
+  // - a tap on a message, a help page, a result page or the score board goes on.
   const canvas = document.getElementById('screen');
-  canvas.addEventListener('pointerdown', (ev) => {
+  const toGame = (ev) => {
     const rect = canvas.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) * R.W / rect.width;
-    const y = (ev.clientY - rect.top) * R.H / rect.height;
-    if (y < R.H - 16) return;
-    const code = x < R.W / 2 ? K_SOFT_L : K_SOFT_R;
+    return [(ev.clientX - rect.left) * R.W / rect.width, (ev.clientY - rect.top) * R.H / rect.height];
+  };
+  canvas.addEventListener('pointerdown', (ev) => {
+    if (!B.a6) return;
+    const [x, y] = toGame(ev);
+    let code = null;
+    if (B.cy >= 0) {
+      code = K_SOFT_R;                                   // message: Next / Close
+    } else if (y >= R.H - 22 && !(isTouch && playing)) {
+      code = x < R.W / 2 ? K_SOFT_L : K_SOFT_R;          // soft key labels
+    } else if (B.a === 2) {
+      const row = menuRowAt(x, y);
+      if (row >= 0) { G.c = row; G.h = 2; code = K_FIRE; }
+    } else if (B.a === 5) {
+      code = K_FIRE;                                     // score board: any key
+    } else if (B.a >= 8 && B.a <= 10) {
+      code = K_SOFT_R;                                   // result pages: Close
+    } else if (B.a === 12) {
+      code = K_SOFT_L;                                   // help pages: Next
+    }
+    if (code === null) return;
     ev.preventDefault();
     press('c', code);
     const up = () => { release('c', code); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); };
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    if (ev.pointerType !== 'mouse' || !B.a6) return;
+    const [x, y] = toGame(ev);
+    const row = B.a === 2 && B.cy < 0 ? menuRowAt(x, y) : -1;
+    canvas.style.cursor = row >= 0 || y >= R.H - 22 ? 'pointer' : '';
+    if (row >= 0 && row !== G.c) { G.c = row; G.h = 2; }
   });
 
   // Touch buttons
@@ -175,6 +240,24 @@ function installInput() {
   }
   installStick();
   installFullscreenButton();
+}
+
+// Which menu item is at game position (x, y), or -1. Same layout as
+// G.draw() (menu.js), as the game calls it from paint() in state 2.
+function menuRowAt(x, y) {
+  if (B.a !== 2 || B.cy >= 0 || G.b === 0) return -1;
+  const f = B.bm;
+  const rowH = G.a === 14 || G.a === 60 || G.a === 92 || G.a === 82 ? 16 : f.a + 4;
+  let w = G.d != null ? f.width(G.d) : 0;
+  for (let i = 0; i < G.b; i++) w = Math.max(w, f.width(G.g[G.e[i]]));
+  const rows = G.b + (G.d != null ? 1 : 0);
+  const boxW = Math.max(w + 8, B.r);
+  const boxX = (B.r - boxW) >> 1;
+  const boxY = (B.s - rows * rowH) >> 1;
+  const top = boxY + 4 + (G.d != null ? rowH - (rowH >> 1) : 0);
+  if (x < boxX || x >= boxX + boxW || y < top) return -1;
+  const i = Math.floor((y - top) / rowH);
+  return i < G.b ? i : -1;
 }
 
 // Touch joystick (nipplejs). It appears where the thumb touches the left

@@ -10,12 +10,16 @@ The game logic is a line-by-line translation of the original Java bytecode. The 
 
 | Desktop | Phone | Action |
 | --- | --- | --- |
-| W A S D / arrow keys | joystick (left half of the screen) | fly, move in menus |
+| W A S D / arrow keys | joystick (left side) | fly, move in menus |
 | Space | FIRE | fire, select in menus |
 | E | EJECT | eject; press again to open the parachute |
-| Enter | OK | left soft key (Select, Next, Help) |
-| Esc | ☰ | right soft key (Back, pause, Close) |
-| F | ⛶ | full screen |
+| Enter | tap the "Select" / "Next" / "Help" label | left soft key |
+| Esc | ❚❚ or tap the "Back" / "Close" label | right soft key (Back, pause, Close) |
+| F | | full screen |
+
+On a phone the gamepad (joystick, FIRE, EJECT, ❚❚) shows only while you fly. It has its own space: below the game in portrait, beside it in landscape, so it never covers the picture.
+
+In menus you can tap or click an item to choose it. On desktop the mouse also highlights the item under it. A tap on a message, a help page, a result page or the score board goes on.
 
 ## Two players
 

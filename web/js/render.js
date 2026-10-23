@@ -131,8 +131,14 @@ const R = {
   resize(first) {
     const vw = window.innerWidth, vh = window.innerHeight;
     const dpr = window.devicePixelRatio || 1;
-    const [W, H] = chooseScreenSize(vw, vh);
-    const S = Math.max(1, Math.floor(Math.min(vw * dpr / W, vh * dpr / H)));
+    // Space kept free for the touch controls (set by main.js)
+    const ins = R.insets ? R.insets(vw, vh) : { l: 0, t: 0, r: 0, b: 0 };
+    const stage = document.getElementById('stage');
+    stage.style.left = ins.l + 'px'; stage.style.top = ins.t + 'px';
+    stage.style.right = ins.r + 'px'; stage.style.bottom = ins.b + 'px';
+    const aw = vw - ins.l - ins.r, ah = vh - ins.t - ins.b;
+    const [W, H] = chooseScreenSize(aw, ah);
+    const S = Math.max(1, Math.floor(Math.min(aw * dpr / W, ah * dpr / H)));
     R.W = W; R.H = H; R.S = S;
     for (const cv of [R.view, R.fb]) { cv.width = W * S; cv.height = H * S; }
     R.view.style.width = (W * S / dpr) + 'px';
