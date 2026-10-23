@@ -37,11 +37,18 @@ The message format and the timing are the same as in the original.
   - `font.js` = `c` (bitmap font), `menu.js` = `g` (menus), `sound.js` = `h`, `input.js` = `i`, `link.js` = `j` (the two-player link)
   - Field names are the original ones; methods have readable names, with the original signature in a comment above each one.
 - `web/js/midp.js` is a small copy of the phone APIs the game uses: Graphics, Image, data streams, `java.util.Random` and RecordStore (here it saves to `localStorage`).
-- The screen is 128×128, the size the game was made for, scaled up to fill the window.
+- `web/js/render.js` is a display layer. It changes how the game looks, not how it plays:
+  - **Screen shape:** the game's screen size follows the window. In landscape it is 128 px tall and up to 255 px wide, which is the whole arena. In portrait it is 128 px wide and up to 208 px tall. The game already reads its screen size from the phone, so the logic does not change.
+  - **Sharp pixels:** the game draws at full device resolution, in whole steps, so the pixel art stays sharp.
+  - **Smooth motion:** the game still runs at 20 ticks per second. Each tick is kept as a list of draw commands, and the screen draws it again at 60 fps. The camera and the moving sprites slide smoothly between ticks.
+  - **Parallax:** the original sky and ground strips are split by colour into far clouds, trees and ground. These scroll at different speeds over a sky gradient.
+  - **Effects:** bullet glow, explosion flash and shake, hit sparks, light trails behind planes, a vignette, and a blurred backdrop beside the screen. The effects use their own random numbers, so they never change the game's random sequence.
+  - `?w=128&h=128` in the address gives the original square screen.
 
 ### Changes for the web
 
 - The main menu has no "Quit" item.
+- The 128×128 title and advert pictures are centered over a blurred copy of themselves.
 - Keyboard, joystick and touch buttons replace the phone keypad.
 - The two-player link goes between browser tabs (see above).
 

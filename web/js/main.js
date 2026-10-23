@@ -25,8 +25,6 @@ const KEYMAP = {
 for (let d = 0; d <= 9; d++) KEYMAP['Digit' + d] = 48 + d;
 
 const params = new URLSearchParams(location.search);
-const SCREEN_W = parseInt(params.get('w') || '128', 10);
-const SCREEN_H = parseInt(params.get('h') || '128', 10);
 const isTouch = matchMedia('(pointer: coarse)').matches || params.has('touch');
 if (isTouch) document.body.classList.add('touch');
 
@@ -37,10 +35,7 @@ async function fetchBytes(path) {
 }
 
 async function boot() {
-  const canvas = document.getElementById('screen');
-  canvas.width = SCREEN_W;
-  canvas.height = SCREEN_H;
-  fitScreen();
+  R.init(document.getElementById('screen'), document.getElementById('backdrop'));
 
   const [files, ads, wav] = await Promise.all([
     Promise.all(RES_FILES.map((n) => fetchBytes('res/' + n))),
@@ -51,7 +46,8 @@ async function boot() {
   AD_FILES.forEach((n, i) => { MImage.resources['/' + n] = ads[i]; });
 
   // new BluetoothBiplanes() -> new b(this)
-  await B.init(canvas);
+  await B.init(R.g, R.W, R.H);
+  R.buildLayers();
 
   // Browsers only allow sound after a key press or a tap.
   const overlay = document.getElementById('start');
@@ -151,10 +147,10 @@ function installInput() {
   const canvas = document.getElementById('screen');
   canvas.addEventListener('pointerdown', (ev) => {
     const rect = canvas.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) * canvas.width / rect.width;
-    const y = (ev.clientY - rect.top) * canvas.height / rect.height;
-    if (y < canvas.height - 16) return;
-    const code = x < canvas.width / 2 ? K_SOFT_L : K_SOFT_R;
+    const x = (ev.clientX - rect.left) * R.W / rect.width;
+    const y = (ev.clientY - rect.top) * R.H / rect.height;
+    if (y < R.H - 16) return;
+    const code = x < R.W / 2 ? K_SOFT_L : K_SOFT_R;
     ev.preventDefault();
     press('c', code);
     const up = () => { release('c', code); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); };
@@ -253,17 +249,6 @@ function installFullscreenButton() {
   document.addEventListener('webkitfullscreenchange', sync);
 }
 
-// ---------------------------------------------------------------- layout
-// The screen fills the window: as large as fits, kept square. The touch
-// controls lie over it.
-function fitScreen() {
-  const canvas = document.getElementById('screen');
-  const vw = window.innerWidth, vh = window.innerHeight;
-  const scale = Math.max(1, Math.min(vw / SCREEN_W, vh / SCREEN_H));
-  canvas.style.width = Math.floor(SCREEN_W * scale) + 'px';
-  canvas.style.height = Math.floor(SCREEN_H * scale) + 'px';
-}
-window.addEventListener('resize', fitScreen);
 
 document.getElementById('closed').addEventListener('click', () => location.reload());
 

@@ -53,10 +53,11 @@ const B = {
   onExit: null,
 
   // ------------------------------------------------------------ constructor b(BluetoothBiplanes)
-  async init(canvas) {
-    B.screen = new Graphics(canvas);
-    B.r = canvas.width;
-    B.s = canvas.height;
+  // Web: the screen is a Graphics of the display layer (render.js), w x h.
+  async init(screen, w, h) {
+    B.screen = screen;
+    B.r = w;
+    B.s = h;
     B.x = B.r === 128 ? 50 : 25;
     B.dn = 5;
     B.do = B.dn + 3;
@@ -503,10 +504,9 @@ const B = {
     B.pending = true;
   },
 
+  // The display layer (render.js) runs paint().
   paintNow() {
-    B.pending = false;
-    B.screen.reset();
-    B.paint(B.screen);
+    R.paint();
   },
 
   // d(): start the next Bluetooth game on the same link
@@ -900,6 +900,7 @@ const B = {
 
   // a(Graphics): move and draw the game world
   drawWorld(graphics) {
+    graphics.layer = 'world';   // web: marks for the display layer
     if (B.a6[0].v === 0) {
       B.ai = B.a6[0].d - (B.r >> 1);
       B.aj = B.a6[0].e - (B.s >> 1);
@@ -913,13 +914,16 @@ const B = {
     graphics.setColor(52479);
     graphics.fillRect(0, 0, B.r, n3);
     graphics.translate(-B.ai, -B.aj);
+    graphics.space = 'world';
     for (let n4 = 0; n4 < 255; n4 += 128) {
       graphics.drawImage(B.ba, n4, n3, 20);
       graphics.drawImage(B.bb, n4, 0, 20);
     }
     const n5 = B.ay >> 6;
+    graphics.tag = 'ship';
     graphics.drawImage(B.a8[57], n5, B.az, 20);
     graphics.drawImage(B.bd, n5 + B.cw, B.az + B.cx, 20);
+    graphics.tag = null;
     if (B.e) {
       B.ay += 16;
       if (n5 > 255) {
@@ -938,7 +942,9 @@ const B = {
     let n7 = 2;
     while (--n7 >= 0) {
       let bl = false;
+      graphics.tag = 'cloud' + n7;
       graphics.drawImage(B.a9[0], B.aa[n7], B.ab[n7], 3);
+      graphics.tag = null;
       if (B.as === 1) {
         if ((J.d && n7 < B.ap) || (!J.d && n7 >= B.ao)) bl = true;
       } else {
@@ -960,9 +966,12 @@ const B = {
     let n10 = 50;
     while (--n10 >= 0) {
       if (B.bu[n10].a === -1) continue;
+      graphics.tag = 'debris' + n10;
       B.bu[n10].update(graphics);
+      graphics.tag = null;
     }
     graphics.translate(B.ai, B.aj);
+    graphics.space = null;
     if (B.s < 208) {
       const n11 = idiv(B.r * B.r, 255);
       const n12 = idiv(B.ai * n11, B.ak);
@@ -1013,6 +1022,7 @@ const B = {
       B.drawSoftKey(graphics, B.bk[38], false);
       --B.au;
     }
+    graphics.layer = null;
   },
 
   // a(int, int, int, int): is the box on screen
@@ -1363,7 +1373,9 @@ const B = {
             break;
           }
           B.ba = MImage.fromResource('/ad' + B.q + '.png');
-          graphics.drawImage(B.ba, 0, 0, 20);
+          // Web: the 128 x 128 picture in the middle, over a blurred copy
+          graphics.drawBackdrop(B.ba);
+          graphics.drawImage(B.ba, (B.r - 128) >> 1, (B.s - 128) >> 1, 20);
           break;
         }
         case 13: {
@@ -1393,7 +1405,9 @@ const B = {
           B.drawScoreBoard(graphics);
           break;
         case 0:
-          graphics.drawImage(B.a8[0], 0, 0, 20);
+          // Web: the 128 x 128 title picture in the middle, over a blurred copy
+          graphics.drawBackdrop(B.a8[0]);
+          graphics.drawImage(B.a8[0], (B.r - 128) >> 1, (B.s - 128) >> 1, 20);
           break;
         case 3:
           break;

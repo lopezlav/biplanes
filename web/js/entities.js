@@ -55,6 +55,7 @@ class F {
     this.b = n3 >> 6;
     this.c = n4;
     this.d = 0;
+    R.muzzle(this.a + 1, this.b + 1);   // web: display effect only
   }
 
   // a(boolean): remove; bl = it hit something
@@ -360,6 +361,7 @@ class E {
     this.p = 0;
     const n2 = B.sin(this.h) >> 1;
     B.spawnDebris(25, this.d, this.e, n2 - 100, n2 + 100, -270, -50);
+    R.explode(this.d, this.e);   // web: display effect only
   }
 
   // a(Graphics, boolean): move (if bl) and draw
@@ -524,11 +526,15 @@ class E {
     n3 = 0;
     const n7 = this.ao.w >> 6;
     const n8 = this.ao.x >> 6;
+    // web: tags let the display layer move these sprites smoothly
+    const idx = this === B.a6[0] ? 0 : 1;
     let n9 = 2;
     while (--n9 >= 0) {
       let n10;
       const f2 = this.av[n9];
+      graphics.tag = 'b' + idx + n9;
       f2.update(graphics, bl);
+      graphics.tag = null;
       if (((B.as !== 1 || !this.aq) && B.as !== 0) || f2.b === 255 || !this.ao.ap) continue;
       if (this.ao.a < 2 && (n2 = (n3 = Math.abs(f2.a - n5)) * n3 + (n10 = Math.abs(f2.b - n4)) * n10) < 80) {
         ++this.ao.p;
@@ -545,6 +551,7 @@ class E {
           }
         } else {
           B.playSound(2, 1);
+          R.hit(f2.a + 1, f2.b + 1);   // web: display effect only
         }
         f2.kill(true);
       }
@@ -552,6 +559,7 @@ class E {
         B.bt = toByte(B.bt + 8);
         this.ao.v = 3;
         this.ao.aa = 0;
+        R.hit(f2.a + 1, f2.b + 1);   // web: display effect only
         f2.kill(true);
         B.taunt(this);
         this.m += 2;
@@ -563,6 +571,7 @@ class E {
       this.ao.v = 5;
       B.bt = toByte(B.bt + 16);
     }
+    graphics.tag = 'p' + idx;
     switch (this.a) {
       case 0:
       case 1:
@@ -580,6 +589,7 @@ class E {
         if (this.v !== 0) break;
         B.taunt(this.ao);
     }
+    graphics.tag = 'pi' + idx;
     switch (this.v) {
       case 2:
         graphics.drawImage(B.a8[27 + this.ac], this.w >> 6, (this.x >> 6) - 10, 3);
@@ -592,9 +602,12 @@ class E {
       case 3:
         graphics.drawImage(B.a8[17 + this.aa], this.w >> 6, this.x >> 6, 3);
     }
+    graphics.tag = null;
     if (this.a < 2 && this.p > 0) {
       if (this.p === 2) {
+        graphics.tag = 'ps' + idx;
         graphics.drawImage(B.a8[14 + this.q], this.d, this.e, 3);
+        graphics.tag = null;
         ++this.q;
         if (this.q > 2) this.q = 0;
       }
