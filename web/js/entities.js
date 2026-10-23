@@ -55,7 +55,6 @@ class F {
     this.b = n3 >> 6;
     this.c = n4;
     this.d = 0;
-    R.muzzle(this.a + 1, this.b + 1);   // web: display effect only
   }
 
   // a(boolean): remove; bl = it hit something
@@ -361,7 +360,6 @@ class E {
     this.p = 0;
     const n2 = B.sin(this.h) >> 1;
     B.spawnDebris(25, this.d, this.e, n2 - 100, n2 + 100, -270, -50);
-    R.explode(this.d, this.e);   // web: display effect only
   }
 
   // a(Graphics, boolean): move (if bl) and draw
@@ -551,7 +549,6 @@ class E {
           }
         } else {
           B.playSound(2, 1);
-          R.hit(f2.a + 1, f2.b + 1);   // web: display effect only
         }
         f2.kill(true);
       }
@@ -559,7 +556,6 @@ class E {
         B.bt = toByte(B.bt + 8);
         this.ao.v = 3;
         this.ao.aa = 0;
-        R.hit(f2.a + 1, f2.b + 1);   // web: display effect only
         f2.kill(true);
         B.taunt(this);
         this.m += 2;

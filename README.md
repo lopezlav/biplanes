@@ -42,7 +42,7 @@ The message format and the timing are the same as in the original.
   - **Sharp pixels:** the game draws at full device resolution, in whole steps, so the pixel art stays sharp.
   - **Smooth motion:** the game still runs at 20 ticks per second. Each tick is kept as a list of draw commands, and the screen draws it again at 60 fps. The camera and the moving sprites slide smoothly between ticks.
   - **Parallax:** the original sky and ground strips are split by colour into far clouds, trees and ground. These scroll at different speeds over a sky gradient.
-  - **Effects:** bullet glow, explosion flash and shake, hit sparks, light trails behind planes, a vignette, and a blurred backdrop beside the screen. The effects use their own random numbers, so they never change the game's random sequence.
+  - **Side bars:** a blurred copy of the picture fills the space beside the screen.
   - `?w=128&h=128` in the address gives the original square screen.
 
 ### Changes for the web

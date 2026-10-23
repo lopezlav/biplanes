@@ -12,9 +12,7 @@
 // - Parallax: the original sky and ground strips are split by colour into far
 //   clouds, trees and ground, which scroll at different speeds over a sky
 //   gradient.
-// - Effects: glow on bullets, flash and shake on explosions, puffs on hits,
-//   light trails behind flying planes, a soft vignette, and a blurred copy of
-//   the picture behind the side bars.
+// - A blurred copy of the picture behind the side bars.
 'use strict';
 
 const SKY_RGB = 0x00CCFF;   // the game's sky fill colour (52479)
@@ -110,8 +108,6 @@ const R = {
   prev: null, cur: null,      // last two command lists {cmds, t, camX, camY}
   dirty: true,
   layers: null,
-  fx: [], puffs: [], lastPuff: 0,
-  shakeT: 0, shakeAmp: 0,
   started: false,
 
   init(view, back) {
@@ -217,7 +213,7 @@ const R = {
     if (!listMode && R.fbStale) {
       // Leaving play: put the last play frame into the persistent picture,
       // because menus and messages draw on top of it.
-      if (R.cur) R.drawList(R.fctx, R.cur, null, 1, false);
+      if (R.cur) R.drawList(R.fctx, R.cur, null, 1);
       R.fbStale = false;
     }
     g.reset();
@@ -252,13 +248,11 @@ const R = {
         const span = R.cur.t - prev.t;
         alpha = span > 0 && span < 150 ? Math.min(1, (now - R.cur.t) / span) : 1;
       }
-      R.updateFx(now);
-      R.drawList(ctx, R.cur, prev, alpha, true);
+      R.drawList(ctx, R.cur, prev, alpha);
       R.dirty = true;
     } else if (R.dirty) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(R.fb, 0, 0);
-      R.drawVignette(ctx);
     } else {
       return;
     }
@@ -276,18 +270,13 @@ const R = {
   },
 
   // Draw a command list. With prev and alpha < 1, the camera and the tagged
-  // sprites move between the two ticks. fx = draw the effects too.
-  drawList(ctx, list, prev, alpha, fx) {
+  // sprites move between the two ticks.
+  drawList(ctx, list, prev, alpha) {
     const lerp = (a, b) => a + (b - a) * alpha;
     let camX = list.camX, camY = list.camY;
     if (prev && Math.abs(list.camX - prev.camX) < 40 && Math.abs(list.camY - prev.camY) < 40) {
       camX = lerp(prev.camX, list.camX);
       camY = lerp(prev.camY, list.camY);
-    }
-    let sx = 0, sy = 0;
-    if (fx && R.shakeAmp > 0.05) {
-      sx = (Math.random() * 2 - 1) * R.shakeAmp;
-      sy = (Math.random() * 2 - 1) * R.shakeAmp;
     }
     // Where each tagged sprite was in the previous tick
     let before = null;
@@ -301,11 +290,9 @@ const R = {
         before.set(k, c);
       }
     }
-    const env = { camX, camY, sx, sy, alpha };
+    const env = { camX, camY, alpha };
     const bands = new Set();
     const count = new Map();
-    const glows = [];
-    let puffsDone = !fx;
     ctx.setTransform(R.S, 0, 0, R.S, 0, 0);
     for (const c of list.cmds) {
       let lx = c.lx, ly = c.ly;
@@ -317,21 +304,8 @@ const R = {
           lx = lerp(p.lx, c.lx);
           ly = lerp(p.ly, c.ly);
         }
-        if (fx && c.op === 'rect' && c.rgb === 0xFF6600) glows.push([lx + 1.5, ly + 1.5]);
-        if (fx && c.op === 'img' && c.tag[0] === 'p' && B.a7.includes(c.img)) R.trail(c.tag, lx + c.img.w / 2, ly + c.img.h / 2);
-      }
-      // Trails go behind the sprites: draw them after the background.
-      if (!puffsDone && c.space === 'world' && c.op !== 'ground' && c.op !== 'skyband') {
-        R.drawPuffs(ctx, env);
-        puffsDone = true;
       }
       R.exec(ctx, c, env, bands, lx, ly);
-    }
-    if (fx) {
-      ctx.setTransform(R.S, 0, 0, R.S, 0, 0);
-      R.drawGlows(ctx, glows, env);
-      R.drawFx(ctx, env);
-      R.drawVignette(ctx);
     }
   },
 
@@ -341,7 +315,7 @@ const R = {
     let camX = c.camX, camY = c.camY;
     if (env) {
       camX = env.camX; camY = env.camY;
-      if (c.space === 'world') { tx = -env.camX + env.sx; ty = -env.camY + env.sy; }
+      if (c.space === 'world') { tx = -env.camX; ty = -env.camY; }
     }
     const [cx, cy, cw, ch] = c.clip;
     if (cw <= 0 || ch <= 0) return;
@@ -427,122 +401,5 @@ const R = {
     tile(L.clouds, 0.35);
     tile(L.trees, 0.65);
     tile(L.ground, 1);
-  },
-
-  // ---------------------------------------------------------------- effects
-  explode(wx, wy) {
-    R.fx.push({ kind: 'boom', x: wx, y: wy, t0: performance.now() });
-    if (wx > B.ai - 20 && wx < B.ai + R.W + 20 && wy > B.aj - 20 && wy < B.aj + R.H + 20) R.shake(3.5);
-  },
-  hit(wx, wy) { R.fx.push({ kind: 'hit', x: wx, y: wy, t0: performance.now() }); R.shake(1.2); },
-  muzzle(wx, wy) { R.fx.push({ kind: 'muzzle', x: wx, y: wy, t0: performance.now() }); },
-  shake(a) { R.shakeAmp = Math.max(R.shakeAmp, a); R.shakeT = performance.now(); },
-
-  updateFx(now) {
-    R.shakeAmp *= 0.86;
-    R.fx = R.fx.filter((f) => now - f.t0 < 600);
-    R.puffs = R.puffs.filter((p) => now - p.t0 < 700);
-  },
-
-  trail(tag, x, y) {
-    const now = performance.now();
-    const last = R._trail || (R._trail = {});
-    const l = last[tag];
-    if (l && now - l.t < 45) return;
-    if (l && Math.hypot(x - l.x, y - l.y) > 30) { last[tag] = { t: now, x, y }; return; }
-    if (l && Math.hypot(x - l.x, y - l.y) < 0.6) { l.t = now; return; }
-    last[tag] = { t: now, x, y };
-    R.puffs.push({ x, y, t0: now, s: 1 + Math.random() });
-  },
-
-  drawPuffs(ctx, env) {
-    const now = performance.now();
-    ctx.save();
-    ctx.translate(-env.camX + env.sx, -env.camY + env.sy);
-    for (const p of R.puffs) {
-      const k = (now - p.t0) / 700;
-      ctx.globalAlpha = 0.28 * (1 - k);
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 1.2 + k * 3 * p.s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  },
-
-  drawGlows(ctx, glows, env) {
-    if (!glows.length) return;
-    ctx.save();
-    ctx.translate(-env.camX + env.sx, -env.camY + env.sy);
-    ctx.globalCompositeOperation = 'lighter';
-    for (const [x, y] of glows) {
-      const gr = ctx.createRadialGradient(x, y, 0, x, y, 5);
-      gr.addColorStop(0, 'rgba(255,200,80,0.55)');
-      gr.addColorStop(1, 'rgba(255,120,0,0)');
-      ctx.fillStyle = gr;
-      ctx.fillRect(x - 5, y - 5, 10, 10);
-    }
-    ctx.restore();
-  },
-
-  drawFx(ctx, env) {
-    const now = performance.now();
-    ctx.save();
-    ctx.translate(-env.camX + env.sx, -env.camY + env.sy);
-    ctx.globalCompositeOperation = 'lighter';
-    for (const f of R.fx) {
-      const t = (now - f.t0) / 1000;
-      if (f.kind === 'boom') {
-        const k = t / 0.6;
-        const r = 6 + k * 26;
-        const gr = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
-        gr.addColorStop(0, `rgba(255,240,180,${0.75 * (1 - k)})`);
-        gr.addColorStop(0.4, `rgba(255,150,40,${0.45 * (1 - k)})`);
-        gr.addColorStop(1, 'rgba(255,80,0,0)');
-        ctx.fillStyle = gr;
-        ctx.fillRect(f.x - r, f.y - r, r * 2, r * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.5 * (1 - k)})`;
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.arc(f.x, f.y, 4 + k * 20, 0, Math.PI * 2);
-        ctx.stroke();
-      } else if (f.kind === 'hit') {
-        const k = t / 0.25;
-        if (k > 1) continue;
-        const gr = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 7);
-        gr.addColorStop(0, `rgba(255,255,220,${0.8 * (1 - k)})`);
-        gr.addColorStop(1, 'rgba(255,200,80,0)');
-        ctx.fillStyle = gr;
-        ctx.fillRect(f.x - 7, f.y - 7, 14, 14);
-      } else if (f.kind === 'muzzle') {
-        const k = t / 0.12;
-        if (k > 1) continue;
-        const gr = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, 4);
-        gr.addColorStop(0, `rgba(255,250,200,${0.9 * (1 - k)})`);
-        gr.addColorStop(1, 'rgba(255,180,60,0)');
-        ctx.fillStyle = gr;
-        ctx.fillRect(f.x - 4, f.y - 4, 8, 8);
-      }
-    }
-    ctx.restore();
-  },
-
-  drawVignette(ctx) {
-    const w = R.view.width, h = R.view.height;
-    if (!R._vig || R._vig.width !== w || R._vig.height !== h) {
-      // Made once per screen size
-      const c = R._vig = document.createElement('canvas');
-      c.width = w; c.height = h;
-      const x = c.getContext('2d');
-      const gr = x.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.45, w / 2, h / 2, Math.hypot(w, h) * 0.62);
-      gr.addColorStop(0, 'rgba(0,10,30,0)');
-      gr.addColorStop(1, 'rgba(0,10,30,0.28)');
-      x.fillStyle = gr;
-      x.fillRect(0, 0, w, h);
-    }
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.drawImage(R._vig, 0, 0);
-    ctx.restore();
   },
 };
