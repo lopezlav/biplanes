@@ -42,7 +42,8 @@ const INVITE_MS = 20000;       // an invite is open for this long (client shows 
 const NAME_MAX = 12;
 
 function cleanName(s) {
-  s = String(s || '').replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
+  // Only the characters the game font has (names are drawn with it).
+  s = String(s || '').replace(/[^ !"#%'()*,\-.0-9<?A-Za-z]/g, '').replace(/\s+/g, ' ').trim().slice(0, NAME_MAX);
   return s || 'Pilot';
 }
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -260,6 +261,7 @@ export class Match extends DurableObject {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, [role]);
     // Test only: ?lag=ms delays what this player sends (to try slow links).
+    // It only makes the game slower for the player who asks for it.
     const lag = clamp(parseInt(url.searchParams.get('lag'), 10) || 0, 0, 1000);
     server.serializeAttachment({ role, lag });
     if (this.ctx.getWebSockets('host').length && this.ctx.getWebSockets('join').length) {

@@ -599,7 +599,7 @@ const O = {
     const f = B.bm;
     let w = 0;
     for (const l of lines) w = Math.max(w, f.width(l));
-    const W = w + pad * 2, H = lines.length * f.a + pad * 2;
+    const W = Math.max(1, (w | 0) + pad * 2), H = Math.max(1, lines.length * f.a + pad * 2);
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = new Graphics(c);
@@ -804,7 +804,10 @@ const O = {
       return;
     }
     if (O.out) B.drawSoftKey(g, 'Cancel', true);
-    else if (O.target) B.drawSoftKey(g, (O.target.id === O.lastOpp ? 'Rematch ' : 'Fight ') + O.target.name, true);
+    else if (O.target) {
+      const n = O.target.name.length > 8 ? O.target.name.slice(0, 7) + '..' : O.target.name;
+      B.drawSoftKey(g, (O.target.id === O.lastOpp ? 'Rematch ' : 'Fight ') + n, true);
+    }
     B.drawSoftKey(g, B.bk[1], false);
   },
 
